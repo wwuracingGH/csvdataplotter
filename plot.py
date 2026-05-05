@@ -95,12 +95,11 @@ if __name__ == '__main__':
     
     def pltcur():
         global current_file
-        print(current_file)
         ax.clear()
         ax.set_title(filedat[current_file][0])
         if (len(sys.argv) > 2):
             if (sys.argv[2] == 'e'): 
-                ax.scatter(filedat[current_file][3][0],filedat[current_file][3][1])
+                ax.scatter(filedat[current_file][3][1],filedat[current_file][3][0])
             else:
                 ax.plot(filedat[current_file][1],filedat[current_file][2])
         else:
