@@ -8,6 +8,7 @@ from os.path import isfile, join
 def get_points(fp : str, centerpoint) -> tuple[tuple[float, float], list[int], list[float], list[float], list[tuple[float, float, float]]]:
     xvals = []
     yvals = []
+    headers = []
     with open(fp) as f:
         channels = f.readline().split(",")
         try:
@@ -20,6 +21,7 @@ def get_points(fp : str, centerpoint) -> tuple[tuple[float, float], list[int], l
         except:
             return None, None, 0, 0, None 
         
+        headers = list(map(lambda x : x.split("\"")[1], channels))
         data = f.readline().split(",")
         #print(data[Lat_index])
         while(data[Lat_index] == '' or data[Lat_index] == '0.0'):
@@ -44,13 +46,22 @@ def get_points(fp : str, centerpoint) -> tuple[tuple[float, float], list[int], l
         accel_x = []
         accel_y = []
         accel_z = []
+        otherdata = {}
+        for head in headers:
+            otherdata[head] = []
         theta = -47.8 * math.pi / 180.0
-        i = 0
         while(1):
             line = f.readline()
             if line == '': break
             data = line.split(",")
 
+            for i,d in enumerate(data):
+                try:
+                    fl = float(d)
+                except:
+                    fl = float('nan')
+                otherdata[headers[i]].append(fl)
+            
             if len(data) > 100:
                 if data[Lat_index] != '':
                     try:
@@ -70,51 +81,75 @@ def get_points(fp : str, centerpoint) -> tuple[tuple[float, float], list[int], l
                     accel_x.append(ct * ax + st * az)
                     accel_y.append(ay)
                     accel_z.append(-st * ax + ct * az)
+                    
+                    otherdata["AccelX"][-1] = accel_x[-1]
+                    otherdata["AccelY"][-1] = accel_y[-1]
+                    otherdata["AccelZ"][-1] = accel_z[-1]
                     interval.append(float(data[int_idx]) / 1000.0)
         
-    return (centerpoint, interval, xvals, yvals, (accel_x, accel_y, accel_z))
+    return (centerpoint, interval, xvals, yvals, (accel_x, accel_y, accel_z), otherdata)
 
 
-current_file = 1
+current_file = 0
+
+def plottable(interval, xvals, yvals):
+    xvalspruned = []
+    yvalspruned = []
+    interpruned = []
+    i = 0
+    for xv, yv in zip(xvals,yvals):
+        if not math.isnan(xv) and not math.isnan(yv):
+            xvalspruned.append(xv)
+            yvalspruned.append(yv)
+            interpruned.append(interval[i])
+        i += 1
+        
+    return xvalspruned, yvalspruned, interpruned
 
 if __name__ == '__main__':
     fp = sys.argv[1]
     filedat = []
     if (os.path.isfile(fp)):
-        centerpoint, interval, xp, yp, a = get_points(fp, None)
-        filedat.append([fp, xp, yp, a, interval]) 
+        centerpoint, interval, xp, yp, a, otherdata = get_points(fp, None)
+        filedat.append([fp, xp, yp, a, interval, otherdata]) 
     elif (os.path.isdir(fp)):
         # from stackoverflow lol
         logs = [f for f in listdir(fp) if (isfile(join(fp, f)) and f.endswith(".log"))]
         centerpoint = None
         for f in logs:
             print("reading " + join(fp, f))
-            centerpoint, interval, xp, yp, a = get_points(join(fp, f), centerpoint)
+            centerpoint, interval, xp, yp, a, otherdata = get_points(join(fp, f), centerpoint)
             if (centerpoint == None or len(xp) == 0):
                 print("Error reading file " + str(f))
             else: 
-                filedat.append([f, xp, yp, a, interval]) 
+                filedat.append([f, xp, yp, a, interval, otherdata]) 
     else:
         print("ERROR: NOT A VALID FILE OR DIRECTORY!")
         sys.exit(-1)
     
     fig = plt.figure()
     ax = fig.subplots()
-    
+   
     def pltcur():
         global current_file
+        global cb
         ax.clear()
         ax.set_title(filedat[current_file][0])
         if (len(sys.argv) > 2):
             if (sys.argv[2] == 'e'):
-                ax.plot(filedat[current_file][4], filedat[current_file][3][0], color='red')
-                ax.plot(filedat[current_file][4], filedat[current_file][3][1], color='green')
-                ax.plot(filedat[current_file][4], filedat[current_file][3][2], color='blue')
+                xa, ya, inter = plottable(filedat[current_file][4], filedat[current_file][5]['AccelX'], filedat[current_file][5]['AccelY']) 
+                s = ax.scatter(ya, xa, c=inter)
+                fig.colorbar(s)
+            elif (sys.argv[2] == 'a'):
+                for a in sys.argv[3:]:
+                    p1 = plottable(filedat[current_file][4], filedat[current_file][4], filedat[current_file][5][a])
+                    ax.plot(p1[0], p1[1])
             else:
-                ax.plot(filedat[current_file][1],filedat[current_file][2])
+                ax.plot(filedat[current_file][1], filedat[current_file][2])
         else:
-            ax.plot(filedat[current_file][1],filedat[current_file][2])
-        
+            xa, ya, inter = plottable(filedat[current_file][4], filedat[current_file][5]['Latitude'], filedat[current_file][5]['Longitude']) 
+            s = ax.scatter(ya, xa, c=inter)
+            fig.colorbar(s) 
         plt.gca().set_aspect('equal')
         fig.canvas.draw()
      
@@ -131,11 +166,15 @@ if __name__ == '__main__':
         if current_file == -1:
             current_file += len(filedat)
         pltcur()
-         
+    
     bnext = Button(plt.axes([0.0, 0.8, 0.1, 0.1]), 'Next')
     bprev = Button(plt.axes([0.0, 0.6, 0.1, 0.1]), 'Prev')
+    
+
     bnext.on_clicked(next)
     bprev.on_clicked(prev)
-    
+   
+    pltcur()
+     
     plt.gca().set_aspect('equal')
     plt.show()
