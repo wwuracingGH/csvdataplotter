@@ -1,5 +1,5 @@
 import matplotlib.pyplot as plt
-from matplotlib.widgets import Slider, Button, CheckButtons
+from matplotlib.widgets import Slider, Button, CheckButtons, Cursor
 import sys, math, os
 
 from os import listdir
@@ -49,6 +49,9 @@ def get_points(fp : str, centerpoint) -> tuple[tuple[float, float], list[int], l
         otherdata = {}
         for head in headers:
             otherdata[head] = []
+        
+        otherdata["PosX"] = []
+        otherdata["PosY"] = []
         theta = -47.8 * math.pi / 180.0
         while(1):
             line = f.readline()
@@ -56,17 +59,25 @@ def get_points(fp : str, centerpoint) -> tuple[tuple[float, float], list[int], l
             data = line.split(",")
 
             for i,d in enumerate(data):
-                try:
-                    fl = float(d)
-                except:
+                if d == '':
                     fl = float('nan')
+                else:
+                    try:
+                        fl = float(d)
+                    except:
+                        fl = float('nan')
                 otherdata[headers[i]].append(fl)
-            
+             
+            otherdata["PosX"].append(float('nan'))
+            otherdata["PosY"].append(float('nan'))
             if len(data) > 100:
                 if data[Lat_index] != '':
                     try:
                         lat_x = (float(data[Lat_index]) - centerpoint[0]) * m_per_deg_lat
                         lon_x = (float(data[Lon_index]) - centerpoint[1]) * m_per_deg_lon 
+                        
+                        otherdata["PosX"][-1] = lon_x
+                        otherdata["PosY"][-1] = lat_x
                         yvals.append(lat_x)
                         xvals.append(lon_x)
                     except:
@@ -91,7 +102,35 @@ def get_points(fp : str, centerpoint) -> tuple[tuple[float, float], list[int], l
 
 
 current_file = 0
+mouse_hover_point = None
+line = None
+plot = None
+filedat = []
 
+def getposofinterval(xint):
+    if xint < 0 or xint >= filedat[current_file][4][-1]:
+        return None, None
+    i = 0
+    while filedat[current_file][4][i] < xint:
+        i += 1
+    while math.isnan(filedat[current_file][5]['PosX'][i]):
+        i += 1 
+    
+    return (filedat[current_file][5]['PosX'][i], filedat[current_file][5]['PosY'][i]) 
+
+def mouse_move(event):
+    global mouse_hover_point
+    x, y, a = event.xdata, event.ydata, event.inaxes 
+    if (a == plot):
+        xp, yp = getposofinterval(x)
+        
+        if mouse_hover_point is None:
+            mouse_hover_point = line.scatter([0], [0], color='red')
+        if xp is not None:
+            mouse_hover_point.set_offsets([xp, yp])
+         
+        fig.canvas.draw()
+        
 def plottable(interval, xvals, yvals):
     xvalspruned = []
     yvalspruned = []
@@ -108,7 +147,6 @@ def plottable(interval, xvals, yvals):
 
 if __name__ == '__main__':
     fp = sys.argv[1]
-    filedat = []
     if (os.path.isfile(fp)):
         centerpoint, interval, xp, yp, a, otherdata = get_points(fp, None)
         filedat.append([fp, xp, yp, a, interval, otherdata]) 
@@ -127,34 +165,45 @@ if __name__ == '__main__':
         print("ERROR: NOT A VALID FILE OR DIRECTORY!")
         sys.exit(-1)
     
-    fig = plt.figure()
-    ax = fig.subplots()
-   
+    fig, ax = plt.subplots(1, 2)
+     
+    line = ax[0]
+    plot = ax[1]
+    
     def pltcur():
         global current_file
         global cb
-        ax.clear()
-        ax.set_title(filedat[current_file][0])
+        plot.clear()
+        plot.set_title(filedat[current_file][0])
+        
+        line.clear() 
+        line.plot(filedat[current_file][1], filedat[current_file][2])
+        line.axis('equal')
         if (len(sys.argv) > 2):
             if (sys.argv[2] == 'e'):
                 xa, ya, inter = plottable(filedat[current_file][4], filedat[current_file][5]['AccelX'], filedat[current_file][5]['AccelY']) 
-                s = ax.scatter(ya, xa, c=inter)
+                s = plot.scatter(ya, xa, c=inter)
                 fig.colorbar(s)
             elif (sys.argv[2] == 'a'):
                 for a in sys.argv[3:]:
+                    if (a not in filedat[current_file][5]):
+                        continue
                     p1 = plottable(filedat[current_file][4], filedat[current_file][4], filedat[current_file][5][a])
-                    ax.plot(p1[0], p1[1])
-            else:
-                ax.plot(filedat[current_file][1], filedat[current_file][2])
-        else:
-            xa, ya, inter = plottable(filedat[current_file][4], filedat[current_file][5]['Latitude'], filedat[current_file][5]['Longitude']) 
-            s = ax.scatter(ya, xa, c=inter)
-            fig.colorbar(s) 
-        plt.gca().set_aspect('equal')
+                    plot.plot(p1[0], p1[1])
+            elif (sys.argv[2] == 's'):
+                xa, ya, inter = plottable(filedat[current_file][4], filedat[current_file][5]['AccelX'], filedat[current_file][5]['ShockPotLR']) 
+                plot.scatter(xa, ya, c='blue')
+                xa, ya, inter = plottable(filedat[current_file][4], filedat[current_file][5]['AccelX'], filedat[current_file][5]['ShockPotsRR']) 
+                plot.scatter(xa, ya, c='red')
+                xa, ya, inter = plottable(filedat[current_file][4], filedat[current_file][5]['AccelX'], filedat[current_file][5]['ShockPotLF']) 
+                plot.scatter(xa, ya, c='red')
+        cursor = Cursor(plot, color='green', linewidth=2)
         fig.canvas.draw()
      
     def next(val):
         global current_file
+        global mouse_hover_point
+        mouse_hover_point = None
         current_file += 1
         if current_file == len(filedat):
             current_file = 0
@@ -162,6 +211,8 @@ if __name__ == '__main__':
     
     def prev(val):
         global current_file
+        global mouse_hover_point
+        mouse_hover_point = None
         current_file -= 1 
         if current_file == -1:
             current_file += len(filedat)
@@ -169,7 +220,7 @@ if __name__ == '__main__':
     
     bnext = Button(plt.axes([0.0, 0.8, 0.1, 0.1]), 'Next')
     bprev = Button(plt.axes([0.0, 0.6, 0.1, 0.1]), 'Prev')
-    
+    plt.connect('motion_notify_event', mouse_move)
 
     bnext.on_clicked(next)
     bprev.on_clicked(prev)
