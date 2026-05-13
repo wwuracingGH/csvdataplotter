@@ -27,7 +27,7 @@ def get_points(fp : str, centerpoint) -> tuple[tuple[float, float], list[int], l
         while(data[Lat_index] == '' or data[Lat_index] == '0.0'):
             data = f.readline().split(",")
             if (len(data) == 1): 
-                return None, 0, 0, None 
+                return None 
             #print(data[Lat_index])
 
         if (centerpoint is None):
@@ -165,6 +165,11 @@ if __name__ == '__main__':
         print("ERROR: NOT A VALID FILE OR DIRECTORY!")
         sys.exit(-1)
     
+    if sys.argv[2] == 'c':
+        for i in filedat[0][5].keys():
+            print(i)
+        sys.exit(0)
+     
     fig, ax = plt.subplots(1, 2)
      
     line = ax[0]
