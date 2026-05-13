@@ -9,7 +9,7 @@ Open a command prompt. On windows, go to the search bar and type 'cmd', and comm
 
 Type `python --version` to check that it's installed and added to your PATH. If it isn't, try rebooting your computer.
 
-Type `pip install matplotlib`. This installs the only library used by csv plotter.
+Type `pip install matplotlib`. This installs the only library used by csv plotter. If pip is not found, you can also try `python -m pip install matplotlib`.
 
 ### CSV Plotter ###
 
