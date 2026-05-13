@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 from matplotlib.widgets import Slider, Button, CheckButtons, Cursor
-import sys, math, os
+import math, os, sys
+import dearpygui.dearpygui as dpg
 
 from os import listdir
 from os.path import isfile, join
@@ -101,36 +102,6 @@ def get_points(fp : str, centerpoint) -> tuple[tuple[float, float], list[int], l
     return (centerpoint, interval, xvals, yvals, (accel_x, accel_y, accel_z), otherdata)
 
 
-current_file = 0
-mouse_hover_point = None
-line = None
-plot = None
-filedat = []
-
-def getposofinterval(xint):
-    if xint < 0 or xint >= filedat[current_file][4][-1]:
-        return None, None
-    i = 0
-    while filedat[current_file][4][i] < xint:
-        i += 1
-    while math.isnan(filedat[current_file][5]['PosX'][i]):
-        i += 1 
-    
-    return (filedat[current_file][5]['PosX'][i], filedat[current_file][5]['PosY'][i]) 
-
-def mouse_move(event):
-    global mouse_hover_point
-    x, y, a = event.xdata, event.ydata, event.inaxes 
-    if (a == plot):
-        xp, yp = getposofinterval(x)
-        
-        if mouse_hover_point is None:
-            mouse_hover_point = line.scatter([0], [0], color='red')
-        if xp is not None:
-            mouse_hover_point.set_offsets([xp, yp])
-         
-        fig.canvas.draw()
-        
 def plottable(interval, xvals, yvals):
     xvalspruned = []
     yvalspruned = []
@@ -145,11 +116,114 @@ def plottable(interval, xvals, yvals):
         
     return xvalspruned, yvalspruned, interpruned
 
-if __name__ == '__main__':
-    fp = sys.argv[1]
+
+class plotset:
+    def getposofinterval(this, xint):
+        if xint < 0 or xint >= this.filedat[this.current_file][4][-1]:
+            return None, None
+        i = 0
+        while this.filedat[this.current_file][4][i] < xint:
+            i += 1
+        while math.isnan(this.filedat[this.current_file][5]['PosX'][i]):
+            i += 1 
+        
+        return (this.filedat[this.current_file][5]['PosX'][i], this.filedat[this.current_file][5]['PosY'][i]) 
+
+    def mouse_move(this, event):
+        x, y, a = event.xdata, event.ydata, event.inaxes 
+        if (a == this.plot):
+            xp, yp = this.getposofinterval(x)
+            
+            if this.mouse_hover_point is None:
+                this.mouse_hover_point = this.line.scatter([0], [0], color='red')
+            if xp is not None:
+                this.mouse_hover_point.set_offsets([xp, yp])
+            
+            this.fig.canvas.draw()
+            
+    def pltcur(this):
+        tf = this.filedat[this.current_file]
+        this.plot.clear()
+        this.plot.set_title(tf[0])
+        
+        this.line.clear() 
+        this.line.plot(tf[1], tf[2])
+        this.line.axis('equal')
+
+        if (this.type != None):
+            if (this.type == 'e'):
+                xa, ya, inter = plottable(tf[4], tf[5]['AccelX'], tf[5]['AccelY']) 
+                s = this.plot.scatter(ya, xa, c=inter)
+                this.fig.colorbar(s)
+            elif (this.type == 'a'):
+                for a in this.args:
+                    if (a not in tf[5]):
+                        continue
+                    p1 = plottable(tf[4], tf[4], tf[5][a])
+                    this.plot.plot(p1[0], p1[1])
+            elif (this.type == 's'):
+                xa, ya, inter = plottable(tf[4], tf[5]['AccelX'], tf[5]['ShockPotLR']) 
+                this.plot.scatter(xa, ya, c='blue')
+                xa, ya, inter = plottable(tf[4], tf[5]['AccelX'], tf[5]['ShockPotsRR']) 
+                this.plot.scatter(xa, ya, c='red')
+                xa, ya, inter = plottable(tf[4], tf[5]['AccelX'], tf[5]['ShockPotLF']) 
+                this.plot.scatter(xa, ya, c='red')
+        
+        this.fig.canvas.draw()
+     
+    def next(this, val):
+        this.mouse_hover_point = None
+        this.current_file += 1
+        if current_file == len(this.filedat):
+            current_file = 0
+        this.pltcur()
+    
+    def prev(this, val):
+        this.mouse_hover_point = None
+        this.current_file -= 1 
+        if this.current_file == -1:
+            this.current_file += len(this.filedat)
+        this.pltcur()
+
+
+    def __init__(this, fdat, type, args):
+        print(len(fdat), type, args)
+        this.current_file = 0
+        this.mouse_hover_point = None
+        this.line = None
+        this.plot = None
+        this.filedat = fdat
+        this.type = type
+        this.args = args
+        
+        
+        if type == 'c':
+            for i in this.filedat[0][5].keys():
+                print(i)
+            sys.exit(0)
+        
+        this.fig, ax = plt.subplots(1, 2)
+        
+        this.line = ax[0]
+        this.plot = ax[1]
+        
+        bnext = Button(plt.axes([0.0, 0.8, 0.1, 0.1]), 'Next')
+        bprev = Button(plt.axes([0.0, 0.6, 0.1, 0.1]), 'Prev')
+        plt.connect('motion_notify_event', this.mouse_move)
+
+        bnext.on_clicked(this.next)
+        bprev.on_clicked(this.prev)
+    
+        this.pltcur()
+        
+        plt.gca().set_aspect('equal')
+        plt.show()
+
+def getfdatfrompath(fp):
+    filedat = []
     if (os.path.isfile(fp)):
-        centerpoint, interval, xp, yp, a, otherdata = get_points(fp, None)
-        filedat.append([fp, xp, yp, a, interval, otherdata]) 
+            centerpoint, interval, xp, yp, a, otherdata = get_points(fp, None)
+            filedat.append([fp, xp, yp, a, interval, otherdata]) 
     elif (os.path.isdir(fp)):
         # from stackoverflow lol
         logs = [f for f in listdir(fp) if (isfile(join(fp, f)) and f.endswith(".log"))]
@@ -163,74 +237,72 @@ if __name__ == '__main__':
                 filedat.append([f, xp, yp, a, interval, otherdata]) 
     else:
         print("ERROR: NOT A VALID FILE OR DIRECTORY!")
-        sys.exit(-1)
-    
-    if sys.argv[2] == 'c':
-        for i in filedat[0][5].keys():
-            print(i)
-        sys.exit(0)
-     
-    fig, ax = plt.subplots(1, 2)
-     
-    line = ax[0]
-    plot = ax[1]
-    
-    def pltcur():
-        global current_file
-        global cb
-        plot.clear()
-        plot.set_title(filedat[current_file][0])
-        
-        line.clear() 
-        line.plot(filedat[current_file][1], filedat[current_file][2])
-        line.axis('equal')
-        if (len(sys.argv) > 2):
-            if (sys.argv[2] == 'e'):
-                xa, ya, inter = plottable(filedat[current_file][4], filedat[current_file][5]['AccelX'], filedat[current_file][5]['AccelY']) 
-                s = plot.scatter(ya, xa, c=inter)
-                fig.colorbar(s)
-            elif (sys.argv[2] == 'a'):
-                for a in sys.argv[3:]:
-                    if (a not in filedat[current_file][5]):
-                        continue
-                    p1 = plottable(filedat[current_file][4], filedat[current_file][4], filedat[current_file][5][a])
-                    plot.plot(p1[0], p1[1])
-            elif (sys.argv[2] == 's'):
-                xa, ya, inter = plottable(filedat[current_file][4], filedat[current_file][5]['AccelX'], filedat[current_file][5]['ShockPotLR']) 
-                plot.scatter(xa, ya, c='blue')
-                xa, ya, inter = plottable(filedat[current_file][4], filedat[current_file][5]['AccelX'], filedat[current_file][5]['ShockPotsRR']) 
-                plot.scatter(xa, ya, c='red')
-                xa, ya, inter = plottable(filedat[current_file][4], filedat[current_file][5]['AccelX'], filedat[current_file][5]['ShockPotLF']) 
-                plot.scatter(xa, ya, c='red')
-        cursor = Cursor(plot, color='green', linewidth=2)
-        fig.canvas.draw()
-     
-    def next(val):
-        global current_file
-        global mouse_hover_point
-        mouse_hover_point = None
-        current_file += 1
-        if current_file == len(filedat):
-            current_file = 0
-        pltcur()
-    
-    def prev(val):
-        global current_file
-        global mouse_hover_point
-        mouse_hover_point = None
-        current_file -= 1 
-        if current_file == -1:
-            current_file += len(filedat)
-        pltcur()
-    
-    bnext = Button(plt.axes([0.0, 0.8, 0.1, 0.1]), 'Next')
-    bprev = Button(plt.axes([0.0, 0.6, 0.1, 0.1]), 'Prev')
-    plt.connect('motion_notify_event', mouse_move)
+        return []
+    return filedat
 
-    bnext.on_clicked(next)
-    bprev.on_clicked(prev)
-   
-    pltcur()
-     
-    plt.gca().set_aspect('equal')
-    plt.show()
+def selectcb(sender, app_data, user_data):
+    global selected
+    if app_data:
+        selected.append(user_data)
+    else:
+        selected.remove(user_data)
+
+def buildselector(keys):
+    for tag in dpg.get_item_children('buttontab')[1]:
+        dpg.delete_item(tag)
+    for i, k in enumerate(keys):
+        with dpg.table_row(parent='buttontab', tag=f'{k}'):
+            dpg.add_selectable(label=k, span_columns=True, callback=selectcb, user_data=k)
+
+def dircb(sender, app_data):
+    global fdat
+    global loading
+    dpg.show_item(loading)
+    dpg.render_dearpygui_frame()
+    print(app_data['file_path_name'])
+    fdat = getfdatfrompath(app_data['file_path_name'])
+    dpg.hide_item(loading)
+    global selector
+    selector = fdat[0][5].keys()
+
+if __name__ == '__main__':
+    global loading
+    global selector
+    global selected
+    global fdat
+    selector = None
+    selected = []
+    dpg.create_context()
+    
+    with dpg.font_registry():
+        default_font = dpg.add_font("BAHNSCHRIFT.TTF", 20)
+        header_font =  dpg.add_font("BAHNSCHRIFT.TTF", 30)
+        title_font =   dpg.add_font("BAHNSCHRIFT.TTF", 45)
+        
+    dpg.bind_font(default_font)
+    
+    with dpg.file_dialog(directory_selector=True, show=False, callback=dircb, tag="dir_dialog_id", cancel_callback=None, width=600 ,height=400):
+        pass
+    with dpg.file_dialog(directory_selector=False, show=False, callback=dircb, tag="file_dialog_id", cancel_callback=None, width=600 ,height=400):
+        dpg.add_file_extension(".log", color=(150, 255, 150, 255))
+    
+    with dpg.window(label="csvp") as window:
+        dpg.add_button(label="Directory Selector", callback=lambda: dpg.show_item("dir_dialog_id"))
+        dpg.add_button(label="File Selector",      callback=lambda: dpg.show_item("file_dialog_id"))
+        dpg.add_button(label='plot', callback=lambda : plotset(fdat, 'a', selected))
+        loading = dpg.add_text(label='Loading...', show=False)
+        
+        with dpg.table(header_row=True, row_background=True, tag='buttontab'):
+            dpg.add_table_column(label='Channels')
+    
+    dpg.create_viewport(title='csvp', max_width=700, min_height=600)
+    dpg.setup_dearpygui()
+    dpg.show_viewport()
+    dpg.set_primary_window(window, True)
+    
+    while dpg.is_dearpygui_running():
+        if selector is not None:
+            print('selecting')
+            buildselector(selector)
+            selector = None
+        dpg.render_dearpygui_frame()
