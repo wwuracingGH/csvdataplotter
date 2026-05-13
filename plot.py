@@ -1,10 +1,11 @@
 import matplotlib.pyplot as plt
 from matplotlib.widgets import Slider, Button, CheckButtons, Cursor
-import math, os, sys
+import math, os, sys, multiprocessing
 import dearpygui.dearpygui as dpg
 
 from os import listdir
 from os.path import isfile, join
+from threading import Thread
 
 def get_points(fp : str, centerpoint) -> tuple[tuple[float, float], list[int], list[float], list[float], list[tuple[float, float, float]]]:
     xvals = []
@@ -174,8 +175,8 @@ class plotset:
     def next(this, val):
         this.mouse_hover_point = None
         this.current_file += 1
-        if current_file == len(this.filedat):
-            current_file = 0
+        if this.current_file == len(this.filedat):
+            this.current_file = 0
         this.pltcur()
     
     def prev(this, val):
@@ -187,7 +188,8 @@ class plotset:
 
 
     def __init__(this, fdat, type, args):
-        print(len(fdat), type, args)
+        
+        print(fdat[0][5].keys(), type, args)
         this.current_file = 0
         this.mouse_hover_point = None
         this.line = None
@@ -195,7 +197,6 @@ class plotset:
         this.filedat = fdat
         this.type = type
         this.args = args
-        
         
         if type == 'c':
             for i in this.filedat[0][5].keys():
@@ -259,7 +260,6 @@ def dircb(sender, app_data):
     global loading
     dpg.show_item(loading)
     dpg.render_dearpygui_frame()
-    print(app_data['file_path_name'])
     fdat = getfdatfrompath(app_data['file_path_name'])
     dpg.hide_item(loading)
     global selector
@@ -289,8 +289,8 @@ if __name__ == '__main__':
     with dpg.window(label="csvp") as window:
         dpg.add_button(label="Directory Selector", callback=lambda: dpg.show_item("dir_dialog_id"))
         dpg.add_button(label="File Selector",      callback=lambda: dpg.show_item("file_dialog_id"))
-        dpg.add_button(label='plot', callback=lambda : plotset(fdat, 'a', selected))
-        loading = dpg.add_text(label='Loading...', show=False)
+        dpg.add_button(label='plot', callback=lambda : multiprocessing.Process(None, plotset, args=(fdat, 'a', selected)).start())
+        loading = dpg.add_text('Loading...', show=False)
         
         with dpg.table(header_row=True, row_background=True, tag='buttontab'):
             dpg.add_table_column(label='Channels')
@@ -302,7 +302,6 @@ if __name__ == '__main__':
     
     while dpg.is_dearpygui_running():
         if selector is not None:
-            print('selecting')
             buildselector(selector)
             selector = None
         dpg.render_dearpygui_frame()
