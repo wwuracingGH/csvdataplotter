@@ -17,7 +17,7 @@ You can either clone the repository or just download the file `plot.py`.
 
 ## Running ##
 
-The main command looks like this:
+You must open a command prompt to the directory you downloaded the file in. On Windows 11 this can be accomplished by right clicking anywhere in the folder you installed plot.py in while viewing it in file explorer. The main command looks like this:
 
 ```cmd
 python plot.py [dir] a [channel1] [channel2] ... [channeln]
