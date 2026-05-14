@@ -21,7 +21,7 @@ def get_points(fp : str, centerpoint) -> tuple[tuple[float, float], list[int], l
             ay_index = next(i for i,d in enumerate(channels) if d.startswith("\"AccelY"))
             az_index = next(i for i,d in enumerate(channels) if d.startswith("\"AccelZ"))
         except:
-            return None, None, 0, 0, None 
+            return None, None, 0, 0, None, None 
         
         headers = list(map(lambda x : x.split("\"")[1], channels))
         data = f.readline().split(",")
@@ -29,7 +29,7 @@ def get_points(fp : str, centerpoint) -> tuple[tuple[float, float], list[int], l
         while(data[Lat_index] == '' or data[Lat_index] == '0.0'):
             data = f.readline().split(",")
             if (len(data) == 1): 
-                return None 
+                return None, None, 0, 0, None, None 
             #print(data[Lat_index])
 
         if (centerpoint is None):
@@ -161,7 +161,7 @@ class plotset:
                     if (a not in tf[5]):
                         continue
                     p1 = plottable(tf[4], tf[4], tf[5][a])
-                    this.plot.plot(p1[0], p1[1])
+                    this.plot.plot(p1[0], p1[1], label=a)
             elif (this.type == 's'):
                 xa, ya, inter = plottable(tf[4], tf[5]['AccelX'], tf[5]['ShockPotLR']) 
                 this.plot.scatter(xa, ya, c='blue')
@@ -169,7 +169,7 @@ class plotset:
                 this.plot.scatter(xa, ya, c='red')
                 xa, ya, inter = plottable(tf[4], tf[5]['AccelX'], tf[5]['ShockPotLF']) 
                 this.plot.scatter(xa, ya, c='red')
-        
+        this.plot.legend()
         this.fig.canvas.draw()
      
     def next(this, val):
