@@ -54,7 +54,7 @@ def get_points(fp : str, centerpoint) -> tuple[tuple[float, float], list[int], l
         
         otherdata["PosX"] = []
         otherdata["PosY"] = []
-        theta = -47.8 * math.pi / 180.0
+        theta = -56.28 * math.pi / 180.0
         while(1):
             line = f.readline()
             if line == '': break
@@ -253,7 +253,7 @@ def buildselector(keys):
         dpg.delete_item(tag)
     for i, k in enumerate(keys):
         with dpg.table_row(parent='buttontab', tag=f'{k}'):
-            dpg.add_selectable(label=k, span_columns=True, callback=selectcb, user_data=k)
+            dpg.add_checkbox(label=k, callback=selectcb, user_data=k)
 
 def dircb(sender, app_data):
     global fdat
@@ -275,25 +275,38 @@ if __name__ == '__main__':
     dpg.create_context()
     
     with dpg.font_registry():
-        default_font = dpg.add_font("BAHNSCHRIFT.TTF", 20)
-        header_font =  dpg.add_font("BAHNSCHRIFT.TTF", 30)
-        title_font =   dpg.add_font("BAHNSCHRIFT.TTF", 45)
-        
+        try:
+            default_font = dpg.add_font("C:/WINDOWS/FONTS/BAHNSCHRIFT.TTF", 18)
+            header_font =  dpg.add_font("C:/WINDOWS/FONTS/BAHNSCHRIFT.TTF", 25)
+            title_font =   dpg.add_font("C:/WINDOWS/FONTS/BAHNSCHRIFT.TTF", 45)
+        except:
+            print('no banchrift')
+            sys.exit(0)
     dpg.bind_font(default_font)
     
-    with dpg.file_dialog(directory_selector=True, show=False, callback=dircb, tag="dir_dialog_id", cancel_callback=None, width=600 ,height=400):
+    dialog0, dialog1 = None, None
+    dpg.bind_font(default_font)
+    with dpg.file_dialog(directory_selector=True, show=False, callback=dircb, tag="dir_dialog_id", cancel_callback=None, width=600 ,height=400) as d0:
+        dialog0 = d0
         pass
-    with dpg.file_dialog(directory_selector=False, show=False, callback=dircb, tag="file_dialog_id", cancel_callback=None, width=600 ,height=400):
+    with dpg.file_dialog(directory_selector=False, show=False, callback=dircb, tag="file_dialog_id", cancel_callback=None, width=600 ,height=400) as d1:
+        dialog1 = d1
         dpg.add_file_extension(".log", color=(150, 255, 150, 255))
-    
+
     with dpg.window(label="csvp") as window:
+        dpg.bind_font(header_font)
         dpg.add_button(label="Directory Selector", callback=lambda: dpg.show_item("dir_dialog_id"))
         dpg.add_button(label="File Selector",      callback=lambda: dpg.show_item("file_dialog_id"))
         dpg.add_button(label='plot', callback=lambda : multiprocessing.Process(None, plotset, args=(fdat, 'a', selected)).start())
         loading = dpg.add_text('Loading...', show=False)
         
-        with dpg.table(header_row=True, row_background=True, tag='buttontab'):
+        tab = None
+        with dpg.table(header_row=True, row_background=True, tag='buttontab') as _b:
             dpg.add_table_column(label='Channels')
+            tab = _b
+        dpg.bind_item_font(tab, default_font)
+        dpg.bind_item_font(dialog0, default_font)
+        dpg.bind_item_font(dialog1, default_font)
     
     dpg.create_viewport(title='csvp', max_width=700, min_height=600)
     dpg.setup_dearpygui()
