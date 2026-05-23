@@ -55,11 +55,14 @@ def get_points(fp : str, centerpoint) -> tuple[tuple[float, float], list[int], l
         otherdata["PosX"] = []
         otherdata["PosY"] = []
         theta = -56.28 * math.pi / 180.0
+        j = 0
         while(1):
             line = f.readline()
             if line == '': break
             data = line.split(",")
-
+            
+            j += 1
+            
             for i,d in enumerate(data):
                 if d == '':
                     fl = float('nan')
@@ -68,7 +71,8 @@ def get_points(fp : str, centerpoint) -> tuple[tuple[float, float], list[int], l
                         fl = float(d)
                     except:
                         fl = float('nan')
-                otherdata[headers[i]].append(fl)
+                while len(otherdata[headers[i]]) < j:
+                    otherdata[headers[i]].append(fl)
              
             otherdata["PosX"].append(float('nan'))
             otherdata["PosY"].append(float('nan'))
@@ -188,8 +192,6 @@ class plotset:
 
 
     def __init__(this, fdat, type, args):
-        
-        print(fdat[0][5].keys(), type, args)
         this.current_file = 0
         this.mouse_hover_point = None
         this.line = None
