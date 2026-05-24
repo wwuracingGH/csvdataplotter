@@ -2,10 +2,12 @@ import matplotlib.pyplot as plt
 from matplotlib.widgets import Slider, Button, CheckButtons, Cursor
 import math, os, sys, multiprocessing
 import dearpygui.dearpygui as dpg
-
+from scipy.signal import savgol_filter 
 from os import listdir
 from os.path import isfile, join
 from threading import Thread
+
+
 
 def get_points(fp : str, centerpoint) -> tuple[tuple[float, float], list[int], list[float], list[float], list[tuple[float, float, float]]]:
     xvals = []
@@ -51,9 +53,11 @@ def get_points(fp : str, centerpoint) -> tuple[tuple[float, float], list[int], l
         otherdata = {}
         for head in headers:
             otherdata[head] = []
-        
+        gpsglast = 0
+        gpstlast = 0
         otherdata["PosX"] = []
         otherdata["PosY"] = []
+        otherdata['gpsG'] = []
         theta = -56.28 * math.pi / 180.0
         j = 0
         while(1):
@@ -71,8 +75,7 @@ def get_points(fp : str, centerpoint) -> tuple[tuple[float, float], list[int], l
                         fl = float(d)
                     except:
                         fl = float('nan')
-                while len(otherdata[headers[i]]) < j:
-                    otherdata[headers[i]].append(fl)
+                otherdata[headers[i]].append(fl)
              
             otherdata["PosX"].append(float('nan'))
             otherdata["PosY"].append(float('nan'))
@@ -86,6 +89,11 @@ def get_points(fp : str, centerpoint) -> tuple[tuple[float, float], list[int], l
                         otherdata["PosY"][-1] = lat_x
                         yvals.append(lat_x)
                         xvals.append(lon_x)
+                        
+                        #g2 = otherdata['Speed'] * (1.0/3.6)
+                        #otherdata['gpsG'].append(((g2 - gpsglast) / ((gpstlast - interval) * 9.81 * 0.001)))
+                        #gpsglast = g2
+                        #gpstlast = interval
                     except:
                         print("bad data: " + data[Lat_index])
                 if data[ax_index] != '':
@@ -102,7 +110,7 @@ def get_points(fp : str, centerpoint) -> tuple[tuple[float, float], list[int], l
                     otherdata["AccelX"][-1] = accel_x[-1]
                     otherdata["AccelY"][-1] = accel_y[-1]
                     otherdata["AccelZ"][-1] = accel_z[-1]
-                    interval.append(float(data[int_idx]) / 1000.0)
+                interval.append(float(data[int_idx]) / 1000.0)
         
     return (centerpoint, interval, xvals, yvals, (accel_x, accel_y, accel_z), otherdata)
 
@@ -158,14 +166,15 @@ class plotset:
         if (this.type != None):
             if (this.type == 'e'):
                 xa, ya, inter = plottable(tf[4], tf[5]['AccelX'], tf[5]['AccelY']) 
-                s = this.plot.scatter(ya, xa, c=inter)
+                s = this.plot.scatter(savgol_filter(ya, window_length=20, polyorder=6), savgol_filter(xa, window_length=20, polyorder=6), c=inter)
                 this.fig.colorbar(s)
             elif (this.type == 'a'):
                 for a in this.args:
                     if (a not in tf[5]):
                         continue
                     p1 = plottable(tf[4], tf[4], tf[5][a])
-                    this.plot.plot(p1[0], p1[1], label=a)
+                    filtered = this.plot.plot(p1[0], savgol_filter(x=p1[1], window_length=20, polyorder=6), label=a)
+                    this.plot.scatter(p1[0], p1[1], label=a + "_raw", marker='x', color=filtered[0].get_color())
             elif (this.type == 's'):
                 xa, ya, inter = plottable(tf[4], tf[5]['AccelX'], tf[5]['ShockPotLR']) 
                 this.plot.scatter(xa, ya, c='blue')
@@ -212,7 +221,8 @@ class plotset:
         
         bnext = Button(plt.axes([0.0, 0.8, 0.1, 0.1]), 'Next')
         bprev = Button(plt.axes([0.0, 0.6, 0.1, 0.1]), 'Prev')
-        plt.connect('motion_notify_event', this.mouse_move)
+        if (this.type == 'a'):
+            plt.connect('motion_notify_event', this.mouse_move)
 
         bnext.on_clicked(this.next)
         bprev.on_clicked(this.prev)
@@ -268,6 +278,10 @@ def dircb(sender, app_data):
     selector = fdat[0][5].keys()
 
 if __name__ == '__main__':
+    if len(sys.argv) >= 2:
+        plotset(getfdatfrompath(sys.argv[1]), sys.argv[2], args=sys.argv[3:])
+        sys.exit()
+    
     global loading
     global selector
     global selected
