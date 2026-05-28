@@ -2,7 +2,8 @@ import matplotlib.pyplot as plt
 from matplotlib.widgets import Slider, Button, CheckButtons, Cursor
 import math, os, sys, multiprocessing
 import dearpygui.dearpygui as dpg
-from scipy.signal import savgol_filter 
+from scipy.signal import savgol_filter
+from scipy.stats import linregress 
 from os import listdir
 from os.path import isfile, join
 from threading import Thread
@@ -115,21 +116,29 @@ def get_points(fp : str, centerpoint) -> tuple[tuple[float, float], list[int], l
     return (centerpoint, interval, xvals, yvals, (accel_x, accel_y, accel_z), otherdata)
 
 
-def plottable(interval, xvals, yvals):
+def plottable(interval, xvals, yvals, condvals=None, cond=None):
     xvalspruned = []
     yvalspruned = []
     interpruned = []
     i = 0
-    for xv, yv in zip(xvals,yvals):
-        if not math.isnan(xv) and not math.isnan(yv):
-            xvalspruned.append(xv)
-            yvalspruned.append(yv)
-            interpruned.append(interval[i])
-        i += 1
+    if condvals is None:
+        for xv, yv in zip(xvals,yvals):
+            if not math.isnan(xv) and not math.isnan(yv):
+                xvalspruned.append(xv)
+                yvalspruned.append(yv)
+                interpruned.append(interval[i])
+            i += 1
+    else:
+        for xv, yv, cv in zip(xvals,yvals,condvals):
+            if not math.isnan(xv) and not math.isnan(yv) and cond(cv):
+                xvalspruned.append(xv)
+                yvalspruned.append(yv)
+                interpruned.append(interval[i])
+            i += 1
         
     return xvalspruned, yvalspruned, interpruned
 
-
+FILTER = False
 class plotset:
     def getposofinterval(this, xint):
         if xint < 0 or xint >= this.filedat[this.current_file][4][-1]:
@@ -173,15 +182,27 @@ class plotset:
                     if (a not in tf[5]):
                         continue
                     p1 = plottable(tf[4], tf[4], tf[5][a])
-                    filtered = this.plot.plot(p1[0], savgol_filter(x=p1[1], window_length=20, polyorder=6), label=a)
-                    this.plot.scatter(p1[0], p1[1], label=a + "_raw", marker='x', color=filtered[0].get_color())
+                    if FILTER:
+                        filtered = this.plot.plot(p1[0], savgol_filter(x=p1[1], window_length=20, polyorder=6), label=a)
+                        this.plot.scatter(p1[0], p1[1], label=a + "_raw", marker='x', color=filtered[0].get_color())
+                    else:
+                        this.plot.plot(p1[0], p1[1], label=a)
             elif (this.type == 's'):
-                xa, ya, inter = plottable(tf[4], tf[5]['AccelX'], tf[5]['ShockPotLR']) 
+                xa, ya, inter = plottable(tf[4], tf[5]['AccelX'], tf[5]['ShockPotLR'], tf[5]['AccelY'], lambda x: abs(x) < 0.025) 
                 this.plot.scatter(xa, ya, c='blue')
-                xa, ya, inter = plottable(tf[4], tf[5]['AccelX'], tf[5]['ShockPotsRR']) 
+                lrlr = linregress(xa, ya)
+                xa, ya, inter = plottable(tf[4], tf[5]['AccelX'], tf[5]['ShockPotsRR'], tf[5]['AccelY'], lambda x: abs(x) < 0.025) 
                 this.plot.scatter(xa, ya, c='red')
-                xa, ya, inter = plottable(tf[4], tf[5]['AccelX'], tf[5]['ShockPotLF']) 
-                this.plot.scatter(xa, ya, c='red')
+                lrrr = linregress(xa, ya)
+                xa, ya, inter = plottable(tf[4], tf[5]['AccelX'], tf[5]['ShockPotLF'], tf[5]['AccelY'], lambda x: abs(x) < 0.025) 
+                this.plot.scatter(xa, ya, c='green')
+                lrfl = linregress(xa, ya)
+                
+                print('lr shock: ' + str(lrlr))
+                print('rr shock: ' + str(lrrr))
+                print('lf shock: ' + str(lrfl))
+                
+                motion_ratio = 0.62
         this.plot.legend()
         this.fig.canvas.draw()
      
