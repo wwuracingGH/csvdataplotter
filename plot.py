@@ -9,7 +9,6 @@ from os.path import isfile, join
 from threading import Thread
 
 
-
 def get_points(fp : str, centerpoint) -> tuple[tuple[float, float], list[int], list[float], list[float], list[tuple[float, float, float]]]:
     xvals = []
     yvals = []
@@ -48,25 +47,28 @@ def get_points(fp : str, centerpoint) -> tuple[tuple[float, float], list[int], l
         m_per_deg_lon = 111412.84 * math.cos(lat_radians) - 93.5 * math.cos(3 * lat_radians) 
 
         interval = []
-        accel_x = []
-        accel_y = []
-        accel_z = []
+       
+        startofdata = f.tell() 
+        while(1):
+            line = f.readline()
+            if line == '': break
+            interval.append(float(line.split(",")[0]) / 1000.0)
+        f.seek(startofdata) 
+        
         otherdata = {}
         for head in headers:
-            otherdata[head] = []
+            otherdata[head] = [float('nan')] * len(interval)
         gpsglast = 0
         gpstlast = 0
-        otherdata["PosX"] = []
-        otherdata["PosY"] = []
-        otherdata['gpsG'] = []
+        otherdata["PosX"] = [float('nan')] * len(interval)
+        otherdata["PosY"] = [float('nan')] * len(interval)
+        otherdata['gpsG'] = [float('nan')] * len(interval)
         theta = -56.28 * math.pi / 180.0
         j = 0
         while(1):
             line = f.readline()
             if line == '': break
             data = line.split(",")
-            
-            j += 1
             
             for i,d in enumerate(data):
                 if d == '':
@@ -76,20 +78,17 @@ def get_points(fp : str, centerpoint) -> tuple[tuple[float, float], list[int], l
                         fl = float(d)
                     except:
                         fl = float('nan')
-                otherdata[headers[i]].append(fl)
+                otherdata[headers[i]][j] = fl
              
-            otherdata["PosX"].append(float('nan'))
-            otherdata["PosY"].append(float('nan'))
+            
             if len(data) > 100:
                 if data[Lat_index] != '':
                     try:
                         lat_x = (float(data[Lat_index]) - centerpoint[0]) * m_per_deg_lat
                         lon_x = (float(data[Lon_index]) - centerpoint[1]) * m_per_deg_lon 
                         
-                        otherdata["PosX"][-1] = lon_x
-                        otherdata["PosY"][-1] = lat_x
-                        yvals.append(lat_x)
-                        xvals.append(lon_x)
+                        otherdata["PosX"][j] = lon_x
+                        otherdata["PosY"][j] = lat_x
                         
                         #g2 = otherdata['Speed'] * (1.0/3.6)
                         #otherdata['gpsG'].append(((g2 - gpsglast) / ((gpstlast - interval) * 9.81 * 0.001)))
@@ -103,23 +102,22 @@ def get_points(fp : str, centerpoint) -> tuple[tuple[float, float], list[int], l
                     az = float(data[az_index])
                     
                     ct = math.cos(theta)
-                    st = math.sin(theta) 
-                    accel_x.append(ct * ax + st * az)
-                    accel_y.append(ay)
-                    accel_z.append(-st * ax + ct * az)
+                    st = math.sin(theta)
                     
-                    otherdata["AccelX"][-1] = accel_x[-1]
-                    otherdata["AccelY"][-1] = accel_y[-1]
-                    otherdata["AccelZ"][-1] = accel_z[-1]
-                interval.append(float(data[int_idx]) / 1000.0)
+                    otherdata["AccelX"][j] = ct * ax + st * az
+                    otherdata["AccelY"][j] = ay
+                    otherdata["AccelZ"][j] = -st * ax + ct * az
+
+            j += 1
         
-    return (centerpoint, interval, xvals, yvals, (accel_x, accel_y, accel_z), otherdata)
+    return (centerpoint, interval, otherdata["PosX"], otherdata["PosY"], (otherdata["AccelX"], otherdata["AccelY"], otherdata["AccelZ"]), otherdata)
 
 
 def plottable(interval, xvals, yvals, condvals=None, cond=None):
     xvalspruned = []
     yvalspruned = []
     interpruned = []
+    print(len(xvals), len(yvals), len(interval), '\n', list(zip(interval[0:30],yvals[0:30])))
     i = 0
     if condvals is None:
         for xv, yv in zip(xvals,yvals):
@@ -168,8 +166,9 @@ class plotset:
         this.plot.clear()
         this.plot.set_title(tf[0])
         
-        this.line.clear() 
-        this.line.plot(tf[1], tf[2])
+        this.line.clear()
+        racingline = plottable(tf[4], tf[1], tf[2]) 
+        this.line.plot(racingline[0], racingline[1])
         this.line.axis('equal')
 
         if (this.type != None):
