@@ -51,8 +51,11 @@ def get_points(fp : str, centerpoint) -> tuple[tuple[float, float], list[int], l
         startofdata = f.tell() 
         while(1):
             line = f.readline()
-            if line == '': break
-            interval.append(float(line.split(",")[0]) / 1000.0)
+            if len(line) < 20: break
+            try:
+                interval.append(float(line.split(",")[0]) / 1000.0)
+            except:
+                interval.append(interval[-1])
         f.seek(startofdata) 
         
         otherdata = {}
@@ -96,7 +99,7 @@ def get_points(fp : str, centerpoint) -> tuple[tuple[float, float], list[int], l
                         #gpstlast = interval
                     except:
                         print("bad data: " + data[Lat_index])
-                if data[ax_index] != '':
+                if data[ax_index] != '' and data[az_index] != '':
                     ax = float(data[ax_index])
                     ay = float(data[ay_index])
                     az = float(data[az_index])
@@ -107,7 +110,6 @@ def get_points(fp : str, centerpoint) -> tuple[tuple[float, float], list[int], l
                     otherdata["AccelX"][j] = ct * ax + st * az
                     otherdata["AccelY"][j] = ay
                     otherdata["AccelZ"][j] = -st * ax + ct * az
-
             j += 1
         
     return (centerpoint, interval, otherdata["PosX"], otherdata["PosY"], (otherdata["AccelX"], otherdata["AccelY"], otherdata["AccelZ"]), otherdata)
