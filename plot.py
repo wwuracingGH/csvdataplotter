@@ -204,6 +204,11 @@ class plotset:
                 print('lf shock: ' + str(lrfl))
                 
                 motion_ratio = 0.62
+            elif (this.type == 'i'):
+                xa, ya, inter = plottable(tf[4], tf[4], tf[5]['Pack_Curren'])
+                this.plot.plot(xa, ya, c='blue')
+                xa, ya, inter = plottable(tf[4], tf[4], list(map(lambda x : x * 10.0, tf[5]['INV_DCB_I'])))
+                this.plot.plot(xa, ya, c='orange')
         this.plot.legend()
         this.fig.canvas.draw()
      
